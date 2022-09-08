@@ -1,0 +1,126 @@
+
+
+#Import Cyclist Data in R studio
+january_22 <- read.csv("202101-divvy-tripdata.csv")
+february_21 <- read.csv("202102-divvy-tripdata.csv")
+march_21 <- read.csv("202103-divvy-tripdata.csv")
+april_21 <- read.csv("202104-divvy-tripdata.csv")
+may_21 <- read.csv("202105-divvy-tripdata.csv")
+june_21 <- read.csv("202106-divvy-tripdata.csv")
+july_21 <- read.csv("202107-divvy-tripdata.csv")
+august_21 <- read.csv("202108-divvy-tripdata.csv")
+september_21 <- read.csv("202109-divvy-tripdata.csv")
+october_21 <- read.csv("202110-divvy-tripdata.csv")
+november_21 <- read.csv("202111-divvy-tripdata.csv")
+december_21 <- read.csv("202112-divvy-tripdata.csv")
+
+ride_data <- rbind(january_22,february_21,march_21,april_21,may_21,june_21,july_21,august_21,september_21,october_21,november_21,december_21)
+
+head(ride_data) #see the first 6 rows of data frame
+nrow(ride_data)#how many rows are in the data frame 
+colnames(ride_data)#list of column names 
+dim(ride_data) #dimension of the data frame
+summary(ride_data) #satistical summary of data, mainly for numerics
+str(ride_data) #see list of colums and data types
+tail(ride_data) #see the last 6 rows of the data frame
+
+#Adding colums for date, month, year, day of the week into data frame
+ride_data$date <- as.Date(ride_data$started_at)
+ride_data$month <- format(as.Date(ride_data$date), "%m")
+ride_data$day <- format(as.Date(ride_data$date), "%d")
+ride_data$year <- format(as.Date(ride_data$date), "%y")
+ride_data$day_of_week <- format (as.Date(ride_data$date), "%A")
+colnames(ride_data) #to get the names of all the columns
+
+#Adding a ride_lenght calculations to ride_data
+ride_data$ride_length <-difftime(ride_data$ended_at, ride_data$started_at)
+str(ride_data) #to inspect the structure of columns
+
+#Convert ride_length from factor to numeric in order to run calculations
+ride_data$ride_length <- as.numeric(as.character(ride_data$ride_length))
+is.numeric(ride_data$ride_length) #to confirm it is now numeric
+
+#Add ride_distance calculation to ride_data
+ride_data$ride_distance <- distGeo(matrix (c(ride_data$start_lng, ride_data$start_lat), ncol=2), matrix (c(ride_data$end_lng, ride_data$end_lat), ncol=2))
+ride_data$ride_distance <- ride_data$ride_distance/1000 #disctance in km 
+
+#Remove "bad" data
+ride_data_clean <- ride_data[!(ride_data$ride_length <= 0),]
+glimpse(ride_data_clean) #gives column names and data in the column
+
+str(ride_data_clean) #first lets check the structure of the data frame
+summary (ride_data_clean) #to check the summarised details of the clean data frame
+
+ride_data_clean %>%
+group_by(member_casual) %>%
+summarise(average_ride_length = mean(ride_length), median_length = median(ride_length),
+max_ride_length = max(ride_length), min_ride_length = min(ride_length))
+
+ride_data_clean %>%
+  group_by(member_casual) %>%
+  summarise(ride_count = length(ride_id))
+
+# lets order the days of the week
+ride_data_clean$day_of_week <- ordered(ride_data_clean$day_of_week, 
+                                       levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+ride_data_clean %>% 
+  group_by(member_casual, day_of_week) %>%  #groups by member_casual
+  summarise(number_of_rides = n() #calculates the number of rides and average duration 
+            ,average_ride_length = mean(ride_length),.groups="drop") %>% # calculates the average duration
+  arrange(member_casual, day_of_week) #sort
+
+
+#Total rides of Members and Casual riders Vs. Day of the week
+
+ride_data_clean %>%  
+  
+  group_by(member_casual, day_of_week) %>% 
+  
+  summarise(number_of_rides = n(), .groups="drop") %>% 
+  
+  arrange(member_casual, day_of_week) %>% 
+  
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual)) +
+  
+  labs(title ="Total rides of Members and Casual riders Vs. Day of the week") +
+  
+  geom_col(width=0.5, position = position_dodge(width=0.5)) +
+  
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE))
+
+#Observation from above data code: Casual Members tends to have a higher number of rides during the weekends, while members are consistent 
+#but have the lowest number of weekeend rides.
+
+
+#Average ride time
+ride_data_clean %>%  
+  group_by(member_casual, day_of_week) %>% 
+  summarise(average_ride_length = mean(ride_length), .groups="drop") %>%
+  ggplot(aes(x = day_of_week, y = average_ride_length, fill = member_casual)) +
+  geom_col(width=0.5, position = position_dodge(width=0.5)) + 
+  labs(title ="Average ride time of Members and Casual riders Vs. Day of the week")
+#Observation from above, casual rider, rides for a longer time during the weekend than the member riders.
+#While members have a consistent pace during the week and highest during the weekend.
+
+
+ride_data_clean %>%  
+  group_by(member_casual, day_of_week) %>% 
+  summarise(number_of_rides = n(),.groups="drop") %>% 
+  arrange(member_casual, day_of_week)  %>% 
+  ggplot(aes(x = day_of_week, y = number_of_rides, fill = member_casual)) +
+  labs(title ="Total rides by Members and Casual riders by week") +
+  theme(axis.text.x = element_text(angle = 45)) +
+  geom_col(width=0.5, position = position_dodge(width=0.5)) +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE))
+#Observation casual riders had a higher number of ride during the weekend, while
+#members had a higher consistent ride during weekdays except sunday.
+
+ride_data_clean %>% 
+  group_by(member_casual) %>% drop_na() %>%
+  summarise(average_ride_distance = mean(ride_distance)) %>%
+  ggplot() + 
+  geom_col(mapping= aes(x= member_casual,y= average_ride_distance,fill=member_casual), show.legend = FALSE)+
+  labs(title = "Mean distance traveled by Members and Casual riders")
+
+
+
